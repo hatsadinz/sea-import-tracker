@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEA Import Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --blue-dark: #1F4E79; --blue-mid: #2E6199; --blue-light: #D6E4F0;
+  --purple-dark: #5A1B6A; --purple-mid: #7B2D8B; --purple-light: #EDE0F5;
+  --green-dark: #375623; --green-light: #E2EFDA;
+  --amber: #ED7D31; --amber-light: #FCE4D6;
+  --red: #C00000; --red-light: #FFE0E0;
+  --yellow: #FFEB9C; --yellow-dark: #9C6500;
+  --gray-bg: #F5F7FA; --white: #fff;
+  --text: #1a1a2e; --text-muted: #6c757d;
+  --border: #dee2e6; --radius: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--gray-bg); color: var(--text); font-size: 14px; }
+
+/* HEADER */
+.header { background: var(--blue-dark); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header .sub { font-size: 12px; opacity: .7; margin-top: 2px; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #4CAF50; animation: pulse 2s infinite; margin-left: auto; }
+.live-label { font-size: 11px; opacity: .8; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* TOP STATS */
+.stats-bar { display: flex; gap: 12px; padding: 16px 24px; flex-wrap: wrap; }
+.stat-card { background: var(--white); border-radius: var(--radius); padding: 12px 18px; flex: 1; min-width: 120px; border-left: 4px solid var(--blue-mid); box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+.stat-card.warn { border-color: var(--amber); }
+.stat-card.danger { border-color: var(--red); }
+.stat-card.ok { border-color: #28a745; }
+.stat-card .num { font-size: 26px; font-weight: 700; color: var(--blue-dark); }
+.stat-card.warn .num { color: var(--amber); }
+.stat-card.danger .num { color: var(--red); }
+.stat-card.ok .num { color: #28a745; }
+.stat-card .lbl { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* TOOLBAR */
+.toolbar { display: flex; align-items: center; gap: 10px; padding: 0 24px 12px; flex-wrap: wrap; }
+.btn { padding: 7px 16px; border-radius: var(--radius); border: 1.5px solid var(--blue-mid); background: var(--white); color: var(--blue-dark); font-size: 13px; cursor: pointer; font-weight: 500; transition: all .15s; }
+.btn:hover { background: var(--blue-light); }
+.btn.primary { background: var(--blue-dark); color: #fff; border-color: var(--blue-dark); }
+.btn.primary:hover { background: var(--blue-mid); }
+.btn.danger-btn { border-color: var(--red); color: var(--red); }
+.upload-wrap { position: relative; }
+.upload-wrap input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.view-tabs { display: flex; gap: 0; margin-left: auto; border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.view-tab { padding: 7px 14px; font-size: 12px; cursor: pointer; background: var(--white); border: none; border-right: 1px solid var(--border); color: var(--text-muted); transition: all .15s; }
+.view-tab:last-child { border-right: none; }
+.view-tab.active { background: var(--blue-dark); color: #fff; }
+
+/* FILTER BAR */
+.filter-bar { display: flex; gap: 8px; padding: 0 24px 12px; flex-wrap: wrap; align-items: center; }
+.filter-bar label { font-size: 12px; color: var(--text-muted); }
+.filter-bar select, .filter-bar input { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 12px; background: var(--white); }
+.filter-chip { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; cursor: pointer; border: 2px solid transparent; transition: all .15s; }
+.filter-chip.all { background: var(--blue-light); color: var(--blue-dark); border-color: var(--blue-mid); }
+.filter-chip.ok { background: var(--green-light); color: var(--green-dark); }
+.filter-chip.ok.active { border-color: var(--green-dark); }
+.filter-chip.warn { background: var(--yellow); color: var(--yellow-dark); }
+.filter-chip.warn.active { border-color: var(--yellow-dark); }
+.filter-chip.danger { background: var(--red-light); color: var(--red); }
+.filter-chip.danger.active { border-color: var(--red); }
+
+/* MAIN CONTENT */
+.main { padding: 0 24px 24px; }
+
+/* CALENDAR */
+.calendar-wrap { background: var(--white); border-radius: var(--radius); box-shadow: 0 1px 4px rgba(0,0,0,.07); overflow: hidden; }
+.cal-nav { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+.cal-nav h2 { font-size: 17px; font-weight: 600; flex: 1; text-align: center; }
+.cal-nav button { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--white); cursor: pointer; font-size: 15px; }
+.cal-nav button:hover { background: var(--blue-light); }
+.cal-legend { display: flex; gap: 12px; padding: 8px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); }
+.cal-dow { text-align: center; padding: 8px 4px; font-size: 11px; font-weight: 600; color: var(--text-muted); background: var(--gray-bg); border-bottom: 1px solid var(--border); }
+.cal-cell { min-height: 90px; padding: 4px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; vertical-align: top; cursor: pointer; transition: background .1s; }
+.cal-cell:hover { background: #f0f7ff; }
+.cal-cell.other-month { background: #fafafa; }
+.cal-cell.today { background: #EBF4FF; }
+.cal-cell.today .day-num { background: var(--blue-dark); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.day-num { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 3px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.cal-event { border-radius: 4px; padding: 2px 5px; font-size: 10px; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.ev-arrival { background: var(--blue-light); color: var(--blue-dark); border-left: 3px solid var(--blue-mid); }
+.ev-freetime { background: var(--red-light); color: var(--red); border-left: 3px solid var(--red); }
+.ev-do { background: var(--purple-light); color: var(--purple-dark); border-left: 3px solid var(--purple-mid); }
+.ev-ship { background: var(--green-light); color: var(--green-dark); border-left: 3px solid #28a745; }
+.more-events { font-size: 10px; color: var(--blue-mid); cursor: pointer; text-align: center; }
+
+/* COUNTDOWN badges in calendar */
+.countdown-badge { position: absolute; top: 3px; right: 3px; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 10px; }
+.cd-ok { background: var(--green-light); color: var(--green-dark); }
+.cd-warn { background: var(--yellow); color: var(--yellow-dark); }
+.cd-over { background: var(--red-light); color: var(--red); }
+
+/* TABLE VIEW */
+.table-wrap { overflow-x: auto; border-radius: var(--radius); box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+table { width: 100%; border-collapse: collapse; background: var(--white); font-size: 12px; }
+thead th { background: var(--blue-dark); color: #fff; padding: 9px 10px; text-align: center; font-size: 11px; font-weight: 600; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+thead th.group-dem { background: var(--purple-dark); }
+thead th.group-ship { background: #2E75B6; }
+thead th.group-status { background: var(--green-dark); }
+tbody tr:nth-child(even) { background: #f8fbff; }
+tbody tr:hover { background: var(--blue-light); }
+tbody td { padding: 7px 10px; border-bottom: 1px solid #eee; white-space: nowrap; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; }
+.badge-ok { background: var(--green-light); color: var(--green-dark); }
+.badge-warn { background: var(--yellow); color: var(--yellow-dark); }
+.badge-over { background: var(--red-light); color: var(--red); }
+.badge-done { background: var(--blue-light); color: var(--blue-dark); }
+.badge-pending { background: var(--purple-light); color: var(--purple-dark); }
+.cd-num { font-weight: 700; text-align: center; }
+.cd-num.ok { color: #28a745; }
+.cd-num.warn { color: var(--amber); }
+.cd-num.over { color: var(--red); }
+
+/* MODAL */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--white); border-radius: 12px; width: min(600px, 95vw); max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+.modal-header { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--blue-dark); border-radius: 12px 12px 0 0; }
+.modal-header h3 { color: #fff; font-size: 16px; }
+.modal-close { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 4px; }
+.modal-body { padding: 20px; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.detail-item label { font-size: 10px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.detail-item p { font-size: 14px; font-weight: 500; margin-top: 2px; }
+.countdown-big { text-align: center; padding: 16px; border-radius: var(--radius); margin: 12px 0; }
+.countdown-big .num { font-size: 48px; font-weight: 800; line-height: 1; }
+.countdown-big .lbl { font-size: 13px; margin-top: 4px; }
+.cd-ok-bg { background: var(--green-light); color: var(--green-dark); }
+.cd-warn-bg { background: var(--yellow); color: var(--yellow-dark); }
+.cd-over-bg { background: var(--red-light); color: var(--red); }
+
+/* TOAST */
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius); color: #fff; font-size: 13px; z-index: 200; transform: translateY(80px); opacity: 0; transition: all .3s; pointer-events: none; }
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { background: #28a745; }
+.toast.error { background: var(--red); }
+.toast.info { background: var(--blue-mid); }
+
+/* EMPTY STATE */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* IFRAME hidden */
+#_gasIframe { display: none; }
+</style>
+</head>
+<body>
+
+<!-- GAS URL — เปลี่ยนหลัง Deploy -->
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw0Y7r1T1XQD-JQbkuqPqczDh5LuX1-AHqWI_9U9Hw7jYJ2z73HFNECAInGbfsY75KGiw/exec';
+</script>
+
+<iframe id="_gasIframe" name="_gasIframe"></iframe>
+
+<div class="header">
+  <div>
+    <h1>🚢 SEA Import Tracker</h1>
+    <div class="sub">Free Time DEM Monitor — ระบบติดตามตู้สินค้าขาเข้า</div>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <div class="live-dot"></div>
+    <span class="live-label" id="lastUpdate">กำลังโหลด...</span>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-bar">
+  <div class="stat-card">
+    <div class="num" id="stat-total">0</div>
+    <div class="lbl">รายการทั้งหมด</div>
+  </div>
+  <div class="stat-card ok">
+    <div class="num" id="stat-ok">0</div>
+    <div class="lbl">🟢 ปกติ</div>
+  </div>
+  <div class="stat-card warn">
+    <div class="num" id="stat-warn">0</div>
+    <div class="lbl">🟡 ใกล้ครบ (≤3 วัน)</div>
+  </div>
+  <div class="stat-card danger">
+    <div class="num" id="stat-over">0</div>
+    <div class="lbl">🔴 เกิน DEM</div>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div class="upload-wrap">
+    <button class="btn primary">📂 Upload Excel</button>
+    <input type="file" accept=".xlsx,.xls" id="fileInput" onchange="handleUpload(this)">
+  </div>
+  <button class="btn" onclick="loadFromSheets()">🔄 รีเฟรช</button>
+  <div class="view-tabs">
+    <button class="view-tab active" onclick="switchView('calendar',this)">📅 Calendar</button>
+    <button class="view-tab" onclick="switchView('table',this)">📋 ตาราง</button>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<div class="filter-bar">
+  <label>กรองตามสถานะ:</label>
+  <span class="filter-chip all active" onclick="setFilter('all',this)">ทั้งหมด</span>
+  <span class="filter-chip ok" onclick="setFilter('ปกติ',this)">🟢 ปกติ</span>
+  <span class="filter-chip warn" onclick="setFilter('ใกล้ครบ',this)">🟡 ใกล้ครบ</span>
+  <span class="filter-chip danger" onclick="setFilter('เกิน DEM',this)">🔴 เกิน DEM</span>
+  <label style="margin-left:12px;">ลูกค้า:</label>
+  <select id="custFilter" onchange="renderView()">
+    <option value="">-- ทั้งหมด --</option>
+  </select>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- CALENDAR VIEW -->
+  <div id="view-calendar">
+    <div class="calendar-wrap">
+      <div class="cal-nav">
+        <button onclick="changeMonth(-1)">◀</button>
+        <h2 id="cal-title"></h2>
+        <button onclick="changeMonth(1)">▶</button>
+        <button class="btn" style="font-size:12px;padding:5px 12px;" onclick="goToday()">วันนี้</button>
+      </div>
+      <div class="cal-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--blue-mid)"></div>วันเรือเข้า</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>วันครบ Free Time</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--purple-mid)"></div>วันแลก D/O</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#28a745"></div>วันส่งของ</div>
+      </div>
+      <div class="cal-grid" id="cal-dow"></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div id="view-table" style="display:none;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="2">#</th>
+            <th rowspan="2">ลูกค้า</th>
+            <th rowspan="2">ท่าตรวจปล่อย</th>
+            <th rowspan="2">รหัส / ชื่อสินค้า</th>
+            <th rowspan="2">วันเรือเข้า</th>
+            <th rowspan="2">B/L No.</th>
+            <th colspan="3" class="group-dem">Free Time DEM</th>
+            <th colspan="2">เอกสาร D/O</th>
+            <th class="group-ship">วันส่งของ</th>
+            <th rowspan="2" class="group-status">สถานะ</th>
+            <th rowspan="2">หมายเหตุ</th>
+          </tr>
+          <tr>
+            <th class="group-dem">เอเย่นเรือ</th>
+            <th class="group-dem">Free Time</th>
+            <th class="group-dem">Countdown</th>
+            <th>วันแลก D/O</th>
+            <th>สถานะ D/O</th>
+            <th class="group-ship">วันส่งของ</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text-muted);">ยังไม่มีข้อมูล — กรุณา Upload Excel หรือรอข้อมูลจาก Google Sheets</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">รายละเอียด</h3>
+      <button class="modal-close" onclick="document.getElementById('modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// DATA & STATE
+// ============================================================
+let allData = [];
+let currentFilter = 'all';
+let currentView = 'calendar';
+let calYear, calMonth;
+
+const today = new Date();
+today.setHours(0,0,0,0);
+calYear = today.getFullYear();
+calMonth = today.getMonth();
+
+// ============================================================
+// DATE UTILS (timezone-safe)
+// ============================================================
+function excelDateStr(v) {
+  if (!v && v !== 0) return null;
+  if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}/)) return v.slice(0,10);
+  if (typeof v === 'string' && v.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+    const p = v.split('/');
+    return p[2]+'-'+p[1]+'-'+p[0];
+  }
+  if (typeof v === 'string') {
+    const d = new Date(v);
+    if (!isNaN(d.getTime()) && d.getUTCFullYear() > 1970)
+      return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
+    return null;
+  }
+  const n = parseFloat(v);
+  if (isNaN(n) || n < 40000) return null;
+  const d = new Date(Math.round((n-25569)*86400000));
+  return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
+}
+
+function normalizeDate(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.slice(0,10);
+  return excelDateStr(v);
+}
+
+function addDays(ds, days) {
+  if (!ds) return null;
+  const d = new Date(ds+'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate()+days);
+  return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());
+}
+
+function countdown(ds) {
+  if (!ds) return null;
+  const d = new Date(ds+'T00:00:00Z');
+  const diff = Math.round((d.getTime()-today.getTime())/86400000);
+  return diff;
+}
+
+function fmtDate(ds) {
+  if (!ds) return '-';
+  const p = ds.split('-');
+  return p[2]+'/'+p[1]+'/'+p[0];
+}
+
+function pad(n) { return String(n).padStart(2,'0'); }
+
+function statusFromCountdown(cd) {
+  if (cd === null) return 'ปกติ';
+  if (cd < 0) return 'เกิน DEM';
+  if (cd <= 3) return 'ใกล้ครบ';
+  return 'ปกติ';
+}
+
+// ============================================================
+// EXCEL UPLOAD
+// ============================================================
+function handleUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array', raw:true});
+      // Look for TEMPLATE_UPLOAD sheet first, else first sheet
+      const sheetName = wb.SheetNames.find(n => n.includes('TEMPLATE')) || wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const raw = XLSX.utils.sheet_to_json(ws, {raw:true, defval:'', header:1});
+      // Find English key header row (has 'customer' AND 'bl_no'/'arrival_date')
+      let headerRow = -1;
+      for (let i = 0; i < Math.min(6, raw.length); i++) {
+        const r = raw[i].map(c => String(c).toLowerCase().trim());
+        if (r.includes('customer') && (r.includes('bl_no') || r.includes('arrival_date'))) {
+          headerRow = i; break;
+        }
+      }
+      if (headerRow < 0) { showToast('ไม่พบ header row — ตรวจสอบไฟล์ Excel', 'error'); return; }
+      const headers = raw[headerRow].map(h => String(h).trim().toLowerCase());
+      // Skip header row + any Thai-label row + instruction rows
+      let dataStartRow = headerRow + 1;
+      while (dataStartRow < raw.length) {
+        const first = String(raw[dataStartRow][0] || '').trim();
+        const isThaiLabel = /^[ลท่รชวัเอสหBb]/.test(first) && !first.match(/^\d/) && !first.includes('-');
+        const isInstruction = first.includes('Row') || first.startsWith('👆') || first.startsWith('⚠');
+        if (first === '' || isThaiLabel || isInstruction) { dataStartRow++; } else { break; }
+      }
+      const rows = [];
+      for (let i = dataStartRow; i < raw.length; i++) {
+        const r = raw[i];
+        const first = String(r[0] || '').trim();
+        if (!first || first.includes('Row') || first.startsWith('👆') || first.startsWith('⚠')) continue;
+        const obj = {};
+        headers.forEach((h,j) => { obj[h] = r[j] ?? ''; });
+        // Normalize dates
+        ['arrival_date','do_date','ship_date'].forEach(k => {
+          obj[k] = excelDateStr(obj[k]) || '';
+        });
+        obj.free_time_days = parseInt(obj.free_time_days) || 7;
+        // Auto-calc status if empty
+        if (obj.arrival_date && obj.free_time_days) {
+          const ftDeadline = addDays(obj.arrival_date, obj.free_time_days);
+          const cd = countdown(ftDeadline);
+          if (!obj.status || obj.status === '') obj.status = statusFromCountdown(cd);
+        }
+        rows.push(obj);
+      }
+      if (!rows.length) { showToast('ไม่พบข้อมูลในไฟล์', 'error'); return; }
+      allData = rows;
+      updateStats();
+      updateCustomerFilter();
+      renderView();
+      saveToSheets(rows);
+      showToast('โหลดข้อมูล '+rows.length+' รายการ — กำลังบันทึกลง Google Sheets...', 'info');
+    } catch(err) {
+      showToast('เกิดข้อผิดพลาด: '+err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+// ============================================================
+// GOOGLE SHEETS
+// ============================================================
+function saveToSheets(rows) {
+  if (!GAS_URL || GAS_URL.includes('YOUR_GAS')) return;
+  let iframe = document.getElementById('_gasIframe');
+  const form = document.createElement('form');
+  form.method = 'POST'; form.action = GAS_URL; form.target = '_gasIframe';
+  form.style.display = 'none';
+  const inp = document.createElement('input');
+  inp.type = 'hidden'; inp.name = 'postData';
+  inp.value = JSON.stringify(rows);
+  form.appendChild(inp);
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+  setTimeout(() => { loadFromSheets(); }, 4500);
+}
+
+async function loadFromSheets() {
+  if (!GAS_URL || GAS_URL.includes('YOUR_GAS')) {
+    document.getElementById('lastUpdate').textContent = 'โหมดออฟไลน์ (ยังไม่ได้ตั้งค่า GAS)';
+    return;
+  }
+  try {
+    const res = await fetch(GAS_URL+'?t='+Date.now());
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      allData = data.map(row => {
+        ['arrival_date','do_date','ship_date'].forEach(k => {
+          row[k] = normalizeDate(row[k]) || '';
+        });
+        row.free_time_days = parseInt(row.free_time_days) || 7;
+        return row;
+      });
+      updateStats();
+      updateCustomerFilter();
+      renderView();
+      const now = new Date();
+      document.getElementById('lastUpdate').textContent =
+        'อัพเดต '+pad(now.getHours())+':'+pad(now.getMinutes());
+    }
+  } catch(e) {
+    document.getElementById('lastUpdate').textContent = 'โหลดไม่สำเร็จ';
+  }
+}
+
+// Auto-refresh every 60s
+setInterval(loadFromSheets, 60000);
+loadFromSheets();
+
+// ============================================================
+// STATS & FILTERS
+// ============================================================
+function getFilteredData() {
+  let data = allData;
+  const custFilter = document.getElementById('custFilter').value;
+  if (custFilter) data = data.filter(r => r.customer === custFilter);
+  if (currentFilter !== 'all') data = data.filter(r => r.status === currentFilter);
+  return data;
+}
+
+function updateStats() {
+  document.getElementById('stat-total').textContent = allData.length;
+  document.getElementById('stat-ok').textContent = allData.filter(r => r.status === 'ปกติ').length;
+  document.getElementById('stat-warn').textContent = allData.filter(r => r.status === 'ใกล้ครบ').length;
+  document.getElementById('stat-over').textContent = allData.filter(r => r.status === 'เกิน DEM').length;
+}
+
+function updateCustomerFilter() {
+  const sel = document.getElementById('custFilter');
+  const cur = sel.value;
+  const customers = [...new Set(allData.map(r => r.customer).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">-- ทั้งหมด --</option>';
+  customers.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    if (c === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderView();
+}
+
+// ============================================================
+// VIEW SWITCHING
+// ============================================================
+function switchView(v, el) {
+  currentView = v;
+  document.getElementById('view-calendar').style.display = v === 'calendar' ? '' : 'none';
+  document.getElementById('view-table').style.display = v === 'table' ? '' : 'none';
+  document.querySelectorAll('.view-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderView();
+}
+
+function renderView() {
+  if (currentView === 'calendar') renderCalendar();
+  else renderTable();
+}
+
+// ============================================================
+// CALENDAR
+// ============================================================
+function renderCalendar() {
+  const dows = ['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+  const dowEl = document.getElementById('cal-dow');
+  dowEl.innerHTML = '';
+  dows.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'cal-dow'; el.textContent = d;
+    dowEl.appendChild(el);
+  });
+
+  const title = new Date(calYear, calMonth, 1)
+    .toLocaleDateString('th-TH', {month:'long', year:'numeric'});
+  document.getElementById('cal-title').textContent = title;
+
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+
+  // Build event map
+  const filtered = getFilteredData();
+  const eventMap = {};
+  function addEvent(ds, type, row) {
+    if (!ds) return;
+    if (!eventMap[ds]) eventMap[ds] = [];
+    eventMap[ds].push({type, row});
+  }
+  filtered.forEach(row => {
+    addEvent(row.arrival_date, 'arrival', row);
+    if (row.arrival_date && row.free_time_days) {
+      addEvent(addDays(row.arrival_date, row.free_time_days), 'freetime', row);
+    }
+    addEvent(row.do_date, 'do', row);
+    addEvent(row.ship_date, 'ship', row);
+  });
+
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+  const todayStr = today.getUTCFullYear()+'-'+pad(today.getUTCMonth()+1)+'-'+pad(today.getUTCDate());
+
+  let cells = [];
+  // Prev month
+  for (let i = firstDay - 1; i >= 0; i--) {
+    cells.push({day: daysInPrev-i, month: calMonth-1, other: true});
+  }
+  // Current month
+  for (let i = 1; i <= daysInMonth; i++) {
+    cells.push({day: i, month: calMonth, other: false});
+  }
+  // Next month
+  const remaining = 42 - cells.length;
+  for (let i = 1; i <= remaining; i++) {
+    cells.push({day: i, month: calMonth+1, other: true});
+  }
+
+  cells.forEach(({day, month, other}) => {
+    const yr = month < 0 ? calYear-1 : month > 11 ? calYear+1 : calYear;
+    const mo = ((month % 12) + 12) % 12;
+    const ds = yr+'-'+pad(mo+1)+'-'+pad(day);
+    const isToday = ds === todayStr;
+
+    const cell = document.createElement('div');
+    cell.className = 'cal-cell' + (other ? ' other-month' : '') + (isToday ? ' today' : '');
+
+    const num = document.createElement('div');
+    num.className = 'day-num';
+    num.textContent = day;
+    cell.appendChild(num);
+
+    const events = eventMap[ds] || [];
+    const MAX_SHOW = 3;
+    events.slice(0, MAX_SHOW).forEach(({type, row}) => {
+      const ev = document.createElement('div');
+      ev.className = 'cal-event ev-'+type;
+      const labels = {arrival:'🚢 '+row.customer, freetime:'⏰ '+row.bl_no, do:'📄 D/O '+row.customer, ship:'📦 ส่งของ '+row.customer};
+      ev.textContent = labels[type] || '';
+      ev.onclick = (e) => { e.stopPropagation(); showDetail(row, type); };
+      cell.appendChild(ev);
+    });
+    if (events.length > MAX_SHOW) {
+      const more = document.createElement('div');
+      more.className = 'more-events';
+      more.textContent = '+'+(events.length-MAX_SHOW)+' เพิ่มเติม';
+      more.onclick = (e) => { e.stopPropagation(); showDayModal(ds, events); };
+      cell.appendChild(more);
+    }
+
+    // Countdown badge for freetime events on that day
+    const ftEvents = events.filter(e => e.type === 'freetime');
+    if (ftEvents.length > 0 && !other) {
+      const cd = countdown(ds);
+      const badge = document.createElement('div');
+      badge.className = 'countdown-badge ' + (cd < 0 ? 'cd-over' : cd <= 3 ? 'cd-warn' : 'cd-ok');
+      badge.textContent = cd < 0 ? 'เกิน '+Math.abs(cd)+'วัน' : cd+'วัน';
+      cell.appendChild(badge);
+    }
+
+    grid.appendChild(cell);
+  });
+}
+
+function changeMonth(d) { calMonth += d; if (calMonth > 11) { calMonth=0; calYear++; } if (calMonth < 0) { calMonth=11; calYear--; } renderCalendar(); }
+function goToday() { calYear=today.getFullYear(); calMonth=today.getMonth(); renderCalendar(); }
+
+// ============================================================
+// TABLE VIEW
+// ============================================================
+function renderTable() {
+  const data = getFilteredData();
+  const tbody = document.getElementById('table-body');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text-muted);">ไม่พบข้อมูล</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map((row, i) => {
+    const ftDeadline = row.arrival_date ? addDays(row.arrival_date, row.free_time_days||7) : null;
+    const cd = countdown(ftDeadline);
+    const cdClass = cd === null ? '' : cd < 0 ? 'over' : cd <= 3 ? 'warn' : 'ok';
+    const cdText = cd === null ? '-' : cd < 0 ? '⚠ เกิน '+Math.abs(cd)+' วัน' : cd+' วัน';
+    const statusBadge = row.status === 'ปกติ' ? 'ok' : row.status === 'ใกล้ครบ' ? 'warn' : 'over';
+    const doBadge = row.do_status === 'แลกแล้ว' ? 'done' : 'pending';
+    return `<tr style="cursor:pointer" onclick="showDetail(allData[${allData.indexOf(row)}])">
+      <td style="text-align:center;color:var(--text-muted)">${i+1}</td>
+      <td><b>${row.customer||'-'}</b></td>
+      <td>${row.port||'-'}</td>
+      <td>${row.item_code||''} ${row.item_name||''}</td>
+      <td style="text-align:center">${fmtDate(row.arrival_date)}</td>
+      <td style="color:var(--blue-mid);font-weight:600">${row.bl_no||'-'}</td>
+      <td style="text-align:center">${row.agent||'-'}</td>
+      <td style="text-align:center">${row.free_time_days||7} วัน</td>
+      <td class="cd-num ${cdClass}" style="text-align:center">${cdText}</td>
+      <td style="text-align:center">${fmtDate(row.do_date)}</td>
+      <td style="text-align:center"><span class="badge badge-${doBadge}">${row.do_status||'-'}</span></td>
+      <td style="text-align:center">${fmtDate(row.ship_date)}</td>
+      <td style="text-align:center"><span class="badge badge-${statusBadge}">${row.status||'-'}</span></td>
+      <td style="color:var(--text-muted);font-size:11px">${row.remark||''}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// MODALS
+// ============================================================
+function showDetail(row, highlightType) {
+  const ftDeadline = row.arrival_date ? addDays(row.arrival_date, row.free_time_days||7) : null;
+  const cd = countdown(ftDeadline);
+  const cdClass = cd === null ? 'cd-ok-bg' : cd < 0 ? 'cd-over-bg' : cd <= 3 ? 'cd-warn-bg' : 'cd-ok-bg';
+  const cdText = cd === null ? 'N/A' : cd < 0 ? 'เกิน '+Math.abs(cd)+' วัน' : cd === 0 ? 'วันนี้!' : cd+' วัน';
+  const cdLabel = cd !== null && cd < 0 ? '⚠ เกิน Free Time แล้ว' : 'เหลือ Free Time';
+
+  document.getElementById('modal-title').textContent = '📦 '+row.customer+' — '+row.bl_no;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="countdown-big ${cdClass}">
+      <div class="num">${cdText}</div>
+      <div class="lbl">${cdLabel} | ครบ ${fmtDate(ftDeadline)}</div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-item"><label>ลูกค้า</label><p>${row.customer||'-'}</p></div>
+      <div class="detail-item"><label>ท่าตรวจปล่อย</label><p>${row.port||'-'}</p></div>
+      <div class="detail-item"><label>รหัส / ชื่อสินค้า</label><p>${row.item_code||''} ${row.item_name||''}</p></div>
+      <div class="detail-item"><label>B/L No.</label><p style="color:var(--blue-mid);font-weight:700">${row.bl_no||'-'}</p></div>
+      <div class="detail-item"><label>วันเรือเข้า</label><p>🚢 ${fmtDate(row.arrival_date)}</p></div>
+      <div class="detail-item"><label>เอเย่นเรือ</label><p>${row.agent||'-'}</p></div>
+      <div class="detail-item"><label>Free Time</label><p>${row.free_time_days||7} วัน</p></div>
+      <div class="detail-item"><label>วันครบ Free Time</label><p>⏰ ${fmtDate(ftDeadline)}</p></div>
+      <div class="detail-item"><label>วันแลก D/O</label><p>📄 ${fmtDate(row.do_date)}</p></div>
+      <div class="detail-item"><label>สถานะ D/O</label><p>${row.do_status||'-'}</p></div>
+      <div class="detail-item"><label>วันส่งของ</label><p>📦 ${fmtDate(row.ship_date)}</p></div>
+      <div class="detail-item"><label>Invoice</label><p>${row.invoice_no||'-'}</p></div>
+    </div>
+    ${row.remark ? '<div style="margin-top:12px;padding:10px;background:var(--yellow);border-radius:6px;font-size:12px">📝 '+row.remark+'</div>' : ''}
+  `;
+  document.getElementById('modal').classList.add('open');
+}
+
+function showDayModal(ds, events) {
+  document.getElementById('modal-title').textContent = '📅 '+fmtDate(ds);
+  const typeLabel = {arrival:'วันเรือเข้า', freetime:'วันครบ Free Time', do:'วันแลก D/O', ship:'วันส่งของ'};
+  document.getElementById('modal-body').innerHTML = events.map(({type, row}) => `
+    <div style="padding:10px;margin-bottom:8px;border-radius:6px;border-left:4px solid;border-color:${type==='arrival'?'var(--blue-mid)':type==='freetime'?'var(--red)':type==='do'?'var(--purple-mid)':'#28a745'};background:var(--gray-bg)">
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">${typeLabel[type]||type}</div>
+      <div style="font-weight:600">${row.customer}</div>
+      <div style="font-size:12px;color:var(--blue-mid)">${row.bl_no} — ${row.item_name||''}</div>
+    </div>
+  `).join('');
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal')) document.getElementById('modal').classList.remove('open');
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast '+type+' show';
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// Init calendar render
+renderCalendar();
+</script>
+</body>
+</html>
